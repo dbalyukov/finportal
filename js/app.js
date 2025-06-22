@@ -214,19 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ${createButtonHTML}
         `;
 
-        let projectsToRender = [...table_projects];
-        if (currentUser.user_role === 'key_account_manager') {
-            projectsToRender = table_projects.filter(p => p.project_kam === currentUser.user_name);
-        }
-
-        // Helper function to highlight search terms
-        function highlightText(text, searchTerm) {
-            if (!searchTerm) return text;
-            const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            return text.replace(regex, '<mark>$1</mark>');
-        }
-
-        let projectsHTML = `
+        // Show loading state
+        const projectsHTML = `
             <div class="projects-list-container">
                 <div class="search-bar">
                     <div class="search-input-container">
@@ -234,10 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button type="button" id="clear-search-btn" class="clear-search-btn" style="display: none;">✕</button>
                     </div>
                     <div class="search-results-info" id="search-results-info" style="display: none;">
-                        <span id="results-count">0</span> из <span id="total-count">${projectsToRender.length}</span> проектов
+                        <span id="results-count">0</span> из <span id="total-count">0</span> проектов
                     </div>
                 </div>
-                <table class="projects-table" id="projects-table">
+                <div id="projects-loading" style="text-align: center; padding: 2rem;">
+                    <p>Загрузка проектов...</p>
+                </div>
+                <table class="projects-table" id="projects-table" style="display: none;">
                     <thead>
                         <tr>
                             <th>Название проекта</th>
@@ -248,15 +240,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${projectsToRender.map(p => `
-                            <tr data-project-id="${p.project_id}">
-                                <td>${p.project_name}</td>
-                                <td>${p.project_kam}</td>
-                                <td>${p.project_client}</td>
-                                <td>${p.project_crm_integration_id}</td>
-                                <td>${p.project_status}</td>
-                            </tr>
-                        `).join('')}
                     </tbody>
                 </table>
             </div>
@@ -264,12 +247,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderMainLayout(projectsHTML, 'Проекты', pageMenuContent, 'list');
 
+        // Load projects from API
+        loadProjects();
+
         // Event Listeners
         const createBtn = document.getElementById('create-project-btn');
         if (createBtn) {
             createBtn.addEventListener('click', () => {
                 guardedNavigate('costs', null); // New project, no data
             });
+        }
+    }
+
+    async function loadProjects() {
+        try {
+            const loadingDiv = document.getElementById('projects-loading');
+            const table = document.getElementById('projects-table');
+            
+            // Show loading
+            loadingDiv.style.display = 'block';
+            table.style.display = 'none';
+            
+            // Load projects from API
+            const projects = await apiClient.getProjects(
+                currentUser.user_role === 'key_account_manager' ? 'key_account_manager' : null,
+                currentUser.user_role === 'key_account_manager' ? currentUser.user_name : null
+            );
+            
+            // Hide loading
+            loadingDiv.style.display = 'none';
+            table.style.display = 'table';
+            
+            // Render projects
+            renderProjectsTable(projects);
+            
+        } catch (error) {
+            console.error('Failed to load projects:', error);
+            const loadingDiv = document.getElementById('projects-loading');
+            loadingDiv.innerHTML = '<p style="color: red;">Ошибка загрузки проектов</p>';
+        }
+    }
+
+    function renderProjectsTable(projects) {
+        // Helper function to highlight search terms
+        function highlightText(text, searchTerm) {
+            if (!searchTerm) return text;
+            const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<mark>$1</mark>');
         }
 
         function updateProjectTable(filteredProjects, searchTerm = '') {
@@ -281,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update results info
             resultsCount.textContent = filteredProjects.length;
-            totalCount.textContent = projectsToRender.length;
+            totalCount.textContent = projects.length;
             
             if (searchTerm) {
                 resultsInfo.style.display = 'block';
@@ -297,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${highlightText(p.project_name, searchTerm)}</td>
                     <td>${highlightText(p.project_kam, searchTerm)}</td>
                     <td>${highlightText(p.project_client, searchTerm)}</td>
-                    <td>${p.project_crm_integration_id}</td>
+                    <td>${p.project_crm_integration_id || '-'}</td>
                     <td>${highlightText(p.project_status, searchTerm)}</td>
                 </tr>
             `).join('');
@@ -306,14 +330,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tableBody.querySelectorAll('tr').forEach(row => {
                 row.addEventListener('click', (e) => {
                     const projectId = e.currentTarget.dataset.projectId;
-                    const project = table_projects.find(p => p.project_id == projectId);
+                    const project = projects.find(p => p.project_id == projectId);
                     guardedNavigate('costs', project);
                 });
             });
         }
 
         // Initial table setup
-        updateProjectTable(projectsToRender);
+        updateProjectTable(projects);
         
         const searchInput = document.getElementById('search-input');
         const clearSearchBtn = document.getElementById('clear-search-btn');
@@ -322,11 +346,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const searchTerm = e.target.value.toLowerCase().trim();
             
             if (searchTerm === '') {
-                updateProjectTable(projectsToRender);
+                updateProjectTable(projects);
                 return;
             }
 
-            const filteredProjects = projectsToRender.filter(p => 
+            const filteredProjects = projects.filter(p => 
                 p.project_name.toLowerCase().includes(searchTerm) ||
                 p.project_kam.toLowerCase().includes(searchTerm) ||
                 p.project_client.toLowerCase().includes(searchTerm) ||
@@ -338,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         clearSearchBtn.addEventListener('click', () => {
             searchInput.value = '';
-            updateProjectTable(projectsToRender);
+            updateProjectTable(projects);
             searchInput.focus();
         });
 
@@ -346,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 searchInput.value = '';
-                updateProjectTable(projectsToRender);
+                updateProjectTable(projects);
             }
         });
     }
@@ -1360,26 +1384,65 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleLogin(event) {
         event.preventDefault();
-        const loginInput = document.getElementById('login').value;
-        const passwordInput = document.getElementById('password').value;
+        
+        const login = document.getElementById('login').value;
+        const password = document.getElementById('password').value;
         const errorMessage = document.getElementById('error-message');
-
-        const user = users.find(u => u.user_name === loginInput && u.user_password === passwordInput);
-
-        if (user) {
-            currentUser = user;
-            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-            navigate('projects');
-        } else {
-            errorMessage.textContent = 'Некорректный логин или пароль.';
-            errorMessage.style.display = 'block';
-        }
+        
+        // Clear previous error
+        errorMessage.style.display = 'none';
+        
+        // Show loading state
+        const submitBtn = event.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Вход...';
+        submitBtn.disabled = true;
+        
+        // Try to login with API
+        apiClient.login(login, password)
+            .then(response => {
+                if (response.success && response.user) {
+                    currentUser = response.user;
+                    
+                    // Save user data to session
+                    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    sessionStorage.setItem('authToken', response.token);
+                    
+                    // Navigate to last page or projects
+                    const lastPage = sessionStorage.getItem('lastPage') || 'projects';
+                    navigate(lastPage);
+                } else {
+                    throw new Error('Invalid response from server');
+                }
+            })
+            .catch(error => {
+                console.error('Login error:', error);
+                errorMessage.textContent = error.message || 'Ошибка входа. Проверьте логин и пароль.';
+                errorMessage.style.display = 'block';
+                
+                // Reset button
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            });
     }
 
     function handleLogout(event) {
         event.preventDefault();
+        
+        // Clear API token
+        apiClient.clearToken();
+        
+        // Clear session data
+        sessionStorage.removeItem('currentUser');
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('lastPage');
+        sessionStorage.removeItem('currentProjectData');
+        
+        // Reset current user
         currentUser = null;
-        sessionStorage.clear();
+        currentProjectData = null;
+        
+        // Navigate to login
         navigate('login');
     }
 
@@ -1393,16 +1456,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INIT ---
     function init() {
-        const storedUser = sessionStorage.getItem('currentUser');
-        if (storedUser) {
-            currentUser = JSON.parse(storedUser);
-            const lastPage = sessionStorage.getItem('lastPage') || 'projects';
-            const storedProjectData = sessionStorage.getItem('currentProjectData');
-            if (storedProjectData) {
-                currentProjectData = JSON.parse(storedProjectData);
+        // Check if user is already logged in
+        const savedUser = sessionStorage.getItem('currentUser');
+        const savedToken = sessionStorage.getItem('authToken');
+        
+        if (savedUser && savedToken) {
+            try {
+                currentUser = JSON.parse(savedUser);
+                apiClient.setToken(savedToken);
+                
+                // Verify token with server
+                apiClient.verifyToken()
+                    .then(response => {
+                        if (response.success) {
+                            // Token is valid, navigate to last page
+                            const lastPage = sessionStorage.getItem('lastPage') || 'projects';
+                            navigate(lastPage);
+                        } else {
+                            // Token is invalid, clear session
+                            handleLogout({ preventDefault: () => {} });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Token verification failed:', error);
+                        // Token verification failed, clear session
+                        handleLogout({ preventDefault: () => {} });
+                    });
+            } catch (error) {
+                console.error('Failed to parse saved user:', error);
+                handleLogout({ preventDefault: () => {} });
             }
-            navigate(lastPage);
         } else {
+            // No saved session, show login
             navigate('login');
         }
     }
