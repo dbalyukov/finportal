@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function navigate(page, data = null) {
+        console.log(`4. Вызвана функция navigate со страницей: ${page}`);
         sessionStorage.setItem('lastPage', page);
 
         if (page === 'costs') {
@@ -47,9 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clearApp();
         switch (page) {
             case 'login':
+                console.log('5. Рендерю страницу логина');
                 renderLogin();
                 break;
             case 'projects':
+                console.log('5. Рендерю страницу проектов');
                 renderProjects(data);
                 break;
             case 'costs':
@@ -1398,9 +1401,11 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.textContent = 'Вход...';
         submitBtn.disabled = true;
         
+        console.log('1. Отправка запроса на логин...');
         // Try to login with API
         apiClient.login(login, password)
             .then(response => {
+                console.log('2. Получен успешный ответ от API:', response);
                 if (response.success && response.user) {
                     currentUser = response.user;
                     
@@ -1410,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Navigate to last page or projects
                     const lastPage = sessionStorage.getItem('lastPage') || 'projects';
+                    console.log(`3. Успешная авторизация. Перехожу на страницу: ${lastPage}`);
                     navigate(lastPage);
                 } else {
                     throw new Error('Invalid response from server');
