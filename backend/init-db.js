@@ -18,11 +18,11 @@ async function initializeDatabase() {
 
         // Create database if it doesn't exist
         const dbName = process.env.DB_NAME || 'finportal_db';
-        await connection.execute(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
+        await connection.query(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
         console.log(`✅ Database '${dbName}' created/verified`);
 
         // Switch to the database
-        await connection.execute(`USE ${dbName}`);
+        await connection.query(`USE ${dbName}`);
 
         // Create tables
         console.log('📋 Creating tables...');
