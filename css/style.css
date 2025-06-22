@@ -307,12 +307,71 @@ header {
     width: 100%;
 }
 
+.search-input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .search-bar input {
     width: 100%;
     padding: 0.75rem;
+    padding-right: 2.5rem;
     border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.clear-search-btn:hover {
+    background-color: var(--medium-gray-color);
+    color: var(--font-color);
+}
+
+.search-results-info {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.search-results-info #results-count {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* Highlight search results */
+mark {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 0.1rem 0.2rem;
+    border-radius: 2px;
+    font-weight: 500;
 }
 
 .projects-table {

@@ -214,10 +214,28 @@ document.addEventListener('DOMContentLoaded', () => {
             ${createButtonHTML}
         `;
 
+        let projectsToRender = [...table_projects];
+        if (currentUser.user_role === 'key_account_manager') {
+            projectsToRender = table_projects.filter(p => p.project_kam === currentUser.user_name);
+        }
+
+        // Helper function to highlight search terms
+        function highlightText(text, searchTerm) {
+            if (!searchTerm) return text;
+            const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<mark>$1</mark>');
+        }
+
         let projectsHTML = `
             <div class="projects-list-container">
                 <div class="search-bar">
-                    <input type="text" id="search-input" placeholder="Поиск...">
+                    <div class="search-input-container">
+                        <input type="text" id="search-input" placeholder="Поиск по названию, КАМ, клиенту или статусу...">
+                        <button type="button" id="clear-search-btn" class="clear-search-btn" style="display: none;">✕</button>
+                    </div>
+                    <div class="search-results-info" id="search-results-info" style="display: none;">
+                        <span id="results-count">0</span> из <span id="total-count">${projectsToRender.length}</span> проектов
+                    </div>
                 </div>
                 <table class="projects-table" id="projects-table">
                     <thead>
@@ -230,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </tr>
                     </thead>
                     <tbody>
-                        ${table_projects.map(p => `
+                        ${projectsToRender.map(p => `
                             <tr data-project-id="${p.project_id}">
                                 <td>${p.project_name}</td>
                                 <td>${p.project_kam}</td>
@@ -254,33 +272,82 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        document.getElementById('projects-table').querySelectorAll('tbody tr').forEach(row => {
-            row.addEventListener('click', (e) => {
-                const projectId = e.currentTarget.dataset.projectId;
-                const project = table_projects.find(p => p.project_id == projectId);
-                guardedNavigate('costs', project);
+        function updateProjectTable(filteredProjects, searchTerm = '') {
+            const tableBody = document.getElementById('projects-table').querySelector('tbody');
+            const resultsInfo = document.getElementById('search-results-info');
+            const resultsCount = document.getElementById('results-count');
+            const totalCount = document.getElementById('total-count');
+            const clearBtn = document.getElementById('clear-search-btn');
+
+            // Update results info
+            resultsCount.textContent = filteredProjects.length;
+            totalCount.textContent = projectsToRender.length;
+            
+            if (searchTerm) {
+                resultsInfo.style.display = 'block';
+                clearBtn.style.display = 'block';
+            } else {
+                resultsInfo.style.display = 'none';
+                clearBtn.style.display = 'none';
+            }
+
+            // Update table with highlighted text
+            tableBody.innerHTML = filteredProjects.map(p => `
+                <tr data-project-id="${p.project_id}">
+                    <td>${highlightText(p.project_name, searchTerm)}</td>
+                    <td>${highlightText(p.project_kam, searchTerm)}</td>
+                    <td>${highlightText(p.project_client, searchTerm)}</td>
+                    <td>${p.project_crm_integration_id}</td>
+                    <td>${highlightText(p.project_status, searchTerm)}</td>
+                </tr>
+            `).join('');
+
+            // Re-attach click handlers
+            tableBody.querySelectorAll('tr').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    const projectId = e.currentTarget.dataset.projectId;
+                    const project = table_projects.find(p => p.project_id == projectId);
+                    guardedNavigate('costs', project);
+                });
             });
-        });
+        }
+
+        // Initial table setup
+        updateProjectTable(projectsToRender);
         
         const searchInput = document.getElementById('search-input');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+
         searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const tableBody = document.getElementById('projects-table').querySelector('tbody');
-            const filteredProjects = table_projects.filter(p => 
+            const searchTerm = e.target.value.toLowerCase().trim();
+            
+            if (searchTerm === '') {
+                updateProjectTable(projectsToRender);
+                return;
+            }
+
+            const filteredProjects = projectsToRender.filter(p => 
                 p.project_name.toLowerCase().includes(searchTerm) ||
                 p.project_kam.toLowerCase().includes(searchTerm) ||
                 p.project_client.toLowerCase().includes(searchTerm) ||
                 p.project_status.toLowerCase().includes(searchTerm)
             );
-            tableBody.innerHTML = filteredProjects.map(p => `
-                <tr data-project-id="${p.project_id}">
-                    <td>${p.project_name}</td>
-                    <td>${p.project_kam}</td>
-                    <td>${p.project_client}</td>
-                    <td>${p.project_crm_integration_id}</td>
-                    <td>${p.project_status}</td>
-                </tr>
-            `).join('');
+            
+            updateProjectTable(filteredProjects, searchTerm);
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            updateProjectTable(projectsToRender);
+            searchInput.focus();
+        });
+
+        // Keyboard shortcuts
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                updateProjectTable(projectsToRender);
+            }
         });
     }
 
