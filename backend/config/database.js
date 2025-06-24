@@ -128,6 +128,46 @@ async function initializeDatabase() {
             )
         `);
 
+        // Create team_list table
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS team_list (
+                team_role_id VARCHAR(50) PRIMARY KEY,
+                team_role_name VARCHAR(100) NOT NULL
+            )
+        `);
+
+        // Create project_team_list table
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS project_team_list (
+                project_id VARCHAR(20) NOT NULL,
+                kam TINYINT(1) DEFAULT 0,
+                center_director TINYINT(1) DEFAULT 0,
+                calculation_center TINYINT(1) DEFAULT 0,
+                project_manager TINYINT(1) DEFAULT 0,
+                tech_calc_support_center TINYINT(1) DEFAULT 0,
+                arch_support_center TINYINT(1) DEFAULT 0,
+                contract_center TINYINT(1) DEFAULT 0,
+                cost_effiency_center TINYINT(1) DEFAULT 0,
+                PRIMARY KEY (project_id)
+            )
+        `);
+
+        // Fill team_list with default roles
+        await connection.execute(`DELETE FROM team_list`);
+        const defaultRoles = [
+            ['kam', 'КАМ'],
+            ['center_director', 'Директор центра'],
+            ['calculation_center', 'Рассчетный центр'],
+            ['project_manager', 'Администратор проекта'],
+            ['tech_calc_support_center', 'ЦОСП'],
+            ['arch_support_center', 'ЦТСП'],
+            ['contract_center', 'Договорной центр'],
+            ['cost_effiency_center', 'СКЭ']
+        ];
+        for (const [id, name] of defaultRoles) {
+            await connection.execute(`INSERT INTO team_list (team_role_id, team_role_name) VALUES (?, ?)`, [id, name]);
+        }
+
         // Insert default users if they don't exist
         const bcrypt = require('bcryptjs');
         const defaultUsers = [

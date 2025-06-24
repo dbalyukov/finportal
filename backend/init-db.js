@@ -122,6 +122,30 @@ async function initializeDatabase() {
             )
         `);
 
+        // Team roles table
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS team_list (
+                team_role_id VARCHAR(50) PRIMARY KEY,
+                team_role_name VARCHAR(100) NOT NULL
+            )
+        `);
+
+        // Project team composition table
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS project_team_list (
+                project_id VARCHAR(20) NOT NULL,
+                kam TINYINT(1) DEFAULT 0,
+                center_director TINYINT(1) DEFAULT 0,
+                calculation_center TINYINT(1) DEFAULT 0,
+                project_manager TINYINT(1) DEFAULT 0,
+                tech_calc_support_center TINYINT(1) DEFAULT 0,
+                arch_support_center TINYINT(1) DEFAULT 0,
+                contract_center TINYINT(1) DEFAULT 0,
+                cost_effiency_center TINYINT(1) DEFAULT 0,
+                PRIMARY KEY (project_id)
+            )
+        `);
+
         console.log('✅ All tables created successfully');
 
         // Insert default users
@@ -206,11 +230,27 @@ async function initializeDatabase() {
 
         console.log('✅ Sample projects created successfully');
 
+        // Fill team_list with default roles
+        await connection.execute(`DELETE FROM team_list`);
+        const defaultRoles = [
+            ['kam', 'КАМ'],
+            ['center_director', 'Директор центра'],
+            ['calculation_center', 'Рассчетный центр'],
+            ['project_manager', 'Администратор проекта'],
+            ['tech_calc_support_center', 'ЦОСП'],
+            ['arch_support_center', 'ЦТСП'],
+            ['contract_center', 'Договорной центр'],
+            ['cost_effiency_center', 'СКЭ']
+        ];
+        for (const [id, name] of defaultRoles) {
+            await connection.execute(`INSERT INTO team_list (team_role_id, team_role_name) VALUES (?, ?)`, [id, name]);
+        }
+
         console.log('\n🎉 Database initialization completed successfully!');
         console.log('\n📋 Summary:');
         console.log(`   Database: ${dbName}`);
         console.log(`   User: ${process.env.DB_USER || 'finportal_user'}`);
-        console.log(`   Tables: users, projects, project_stages, project_costs, constants`);
+        console.log(`   Tables: users, projects, project_stages, project_costs, constants, team_list, project_team_list`);
         console.log('\n🔑 Default login credentials:');
         console.log('   admin/admin123 (Администратор)');
         console.log('   kam1/kam123 (Иван Петров - КАМ)');
