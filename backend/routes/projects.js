@@ -344,6 +344,14 @@ router.post('/:projectId/draft', async (req, res) => {
             [projectId]
         );
 
+        // Добавляю маппинг periodType для этапов
+        const periodTypeMap = {
+            'Месяц': 'month',
+            'Квартал': 'quarter',
+            'month': 'month',
+            'quarter': 'quarter'
+        };
+
         // Insert stages
         for (let i = 0; i < stages.length; i++) {
             const stage = stages[i];
@@ -358,7 +366,7 @@ router.post('/:projectId/draft', async (req, res) => {
                 stage.stage_name || stage.name || `Этап ${i + 1}`,
                 stage.startDate || stage.stage_start_date || null,
                 stage.endDate || stage.stage_end_date || null,
-                stage.periodType || stage.period_type || 'month',
+                periodTypeMap[stage.periodType] || stage.period_type || 'month',
                 stage.periodCount || stage.period_count || 1,
                 stage.plannedRevenue || stage.planned_revenue || 0
             ]);
