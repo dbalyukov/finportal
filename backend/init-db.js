@@ -199,9 +199,9 @@ async function initializeDatabase() {
 
         for (const project of sampleProjects) {
             await connection.execute(`
-                INSERT IGNORE INTO projects (project_id, project_name, project_kam, project_client, project_crm_integration_id, project_status, project_settings_contract_type, project_settings_profitability, project_settings_costs, project_settings_costs_with_nds, project_settings_revenue, project_settings_revenue_with_nds)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [project.project_id, project.project_name, project.project_kam, project.project_client, project.project_crm_integration_id, project.project_status, project.project_settings_contract_type, project.project_settings_profitability, project.project_settings_costs, project.project_settings_costs_with_nds, project.project_settings_revenue, project.project_settings_revenue_with_nds]);
+                INSERT IGNORE INTO projects (project_id, project_name, project_kam, project_client, project_crm_integration_id, project_status, project_settings_team, project_settings_contract_type, project_settings_profitability, project_settings_costs, project_settings_costs_with_nds, project_settings_revenue, project_settings_revenue_with_nds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [project.project_id, project.project_name, project.project_kam, project.project_client, project.project_crm_integration_id, project.project_status, JSON.stringify([]), project.project_settings_contract_type, project.project_settings_profitability, project.project_settings_costs, project.project_settings_costs_with_nds, project.project_settings_revenue, project.project_settings_revenue_with_nds]);
         }
 
         console.log('✅ Sample projects created successfully');
