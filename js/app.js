@@ -165,14 +165,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('confirm-nav-save').addEventListener('click', async () => {
             try {
-                // Capture current data
                 captureCostData();
-                
-                // Get current project ID
-                const projectIdInput = document.querySelector('.cost-calculation-page input[value]');
-                const projectId = projectIdInput ? projectIdInput.value : Math.floor(10000000 + Math.random() * 90000000);
-                
-                // Prepare project data for saving
+                let projectId = currentProjectData?.projectId;
+                if (!currentProjectData?.isCreated) {
+                    const projectPayload = {
+                        project_name: document.getElementById('project-name-input')?.value || 'Без названия',
+                        project_kam: currentUser?.user_name || '',
+                        project_client: '-',
+                        project_crm_integration_id: document.getElementById('crm-deal-number-input')?.value || '-',
+                        stages: []
+                    };
+                    const created = await apiClient.createProject(projectPayload);
+                    projectId = created.project_id;
+                    if (!currentProjectData) currentProjectData = {};
+                    currentProjectData.projectId = projectId;
+                    currentProjectData.isCreated = true;
+                }
                 const projectData = {
                     project_settings: {
                         team: currentProjectData?.team || [],
@@ -186,17 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     stages: currentProjectData?.stages || [],
                     costs: currentProjectData?.costs || {}
                 };
-
-                // Save to database
                 await apiClient.saveProjectDraft(projectId, projectData);
-                
-                // Navigate to target page
                 isPageDirty = false;
                 if (navigationTarget) {
                     navigate(navigationTarget.page, navigationTarget.data);
                 }
                 closeModal();
-                
             } catch (error) {
                 console.error('Failed to save draft:', error);
                 alert('Ошибка при сохранении черновика: ' + error.message);
@@ -576,10 +579,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveDraftBtn) {
             saveDraftBtn.addEventListener('click', async () => {
                 try {
-                    // Capture current data
                     captureCostData();
-                    
-                    // Prepare project data for saving
+                    // Проверяем, есть ли projectId и был ли проект создан
+                    let projectId = currentProjectData?.projectId;
+                    if (!currentProjectData?.isCreated) {
+                        // Создаём проект через API
+                        const projectPayload = {
+                            project_name: document.getElementById('project-name-input')?.value || 'Без названия',
+                            project_kam: currentUser?.user_name || '',
+                            project_client: '-',
+                            project_crm_integration_id: document.getElementById('crm-deal-number-input')?.value || '-',
+                            stages: []
+                        };
+                        const created = await apiClient.createProject(projectPayload);
+                        projectId = created.project_id;
+                        if (!currentProjectData) currentProjectData = {};
+                        currentProjectData.projectId = projectId;
+                        currentProjectData.isCreated = true;
+                    }
+                    // Подготавливаем данные для сохранения
                     const projectData = {
                         project_settings: {
                             team: currentProjectData?.team || [],
@@ -593,14 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         stages: currentProjectData?.stages || [],
                         costs: currentProjectData?.costs || {}
                     };
-
-                    // Save to database
                     await apiClient.saveProjectDraft(projectId, projectData);
-                    
-                    // Show success message
                     alert('Черновик проекта успешно сохранен!');
                     isPageDirty = false;
-                    
                 } catch (error) {
                     console.error('Failed to save draft:', error);
                     alert('Ошибка при сохранении черновика: ' + error.message);
