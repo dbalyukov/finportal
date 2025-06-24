@@ -163,13 +163,44 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal();
         });
 
-        document.getElementById('confirm-nav-save').addEventListener('click', () => {
-            // NOTE: Save logic is not implemented yet. For now, it behaves like discard.
-            isPageDirty = false;
-            if (navigationTarget) {
-                navigate(navigationTarget.page, navigationTarget.data);
+        document.getElementById('confirm-nav-save').addEventListener('click', async () => {
+            try {
+                // Capture current data
+                captureCostData();
+                
+                // Get current project ID
+                const projectIdInput = document.querySelector('.cost-calculation-page input[value]');
+                const projectId = projectIdInput ? projectIdInput.value : Math.floor(10000000 + Math.random() * 90000000);
+                
+                // Prepare project data for saving
+                const projectData = {
+                    project_settings: {
+                        team: currentProjectData?.team || [],
+                        contract_type: document.getElementById('project_settings_contract_type')?.value || '',
+                        profitability: document.getElementById('project_settings_profitability')?.value || '',
+                        costs: document.getElementById('project_settings_costs')?.value || '',
+                        costs_with_nds: document.getElementById('project_settings_costs_with_nds')?.value || '',
+                        revenue: document.getElementById('project_settings_revenue')?.value || '',
+                        revenue_with_nds: document.getElementById('project_settings_revenue_with_nds')?.value || ''
+                    },
+                    stages: currentProjectData?.stages || [],
+                    costs: currentProjectData?.costs || {}
+                };
+
+                // Save to database
+                await apiClient.saveProjectDraft(projectId, projectData);
+                
+                // Navigate to target page
+                isPageDirty = false;
+                if (navigationTarget) {
+                    navigate(navigationTarget.page, navigationTarget.data);
+                }
+                closeModal();
+                
+            } catch (error) {
+                console.error('Failed to save draft:', error);
+                alert('Ошибка при сохранении черновика: ' + error.message);
             }
-            closeModal();
         });
 
         // Navbar navigation listeners
@@ -388,8 +419,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const actionButtonsHTML = !isReadOnly ? `
             <div class="page-menu-actions">
-                <button class="btn">Сохранить черновик</button>
-                <button class="btn">Отправить на согласование</button>
+                <button class="btn" id="save-draft-btn">Сохранить черновик</button>
+                <button class="btn" id="send-for-approval-btn">Отправить на согласование</button>
             </div>
         ` : '';
 
@@ -537,6 +568,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 showModal('team-modal');
+            });
+        }
+
+        // Add event listeners for action buttons
+        const saveDraftBtn = document.getElementById('save-draft-btn');
+        if (saveDraftBtn) {
+            saveDraftBtn.addEventListener('click', async () => {
+                try {
+                    // Capture current data
+                    captureCostData();
+                    
+                    // Prepare project data for saving
+                    const projectData = {
+                        project_settings: {
+                            team: currentProjectData?.team || [],
+                            contract_type: document.getElementById('project_settings_contract_type')?.value || '',
+                            profitability: document.getElementById('project_settings_profitability')?.value || '',
+                            costs: document.getElementById('project_settings_costs')?.value || '',
+                            costs_with_nds: document.getElementById('project_settings_costs_with_nds')?.value || '',
+                            revenue: document.getElementById('project_settings_revenue')?.value || '',
+                            revenue_with_nds: document.getElementById('project_settings_revenue_with_nds')?.value || ''
+                        },
+                        stages: currentProjectData?.stages || [],
+                        costs: currentProjectData?.costs || {}
+                    };
+
+                    // Save to database
+                    await apiClient.saveProjectDraft(projectId, projectData);
+                    
+                    // Show success message
+                    alert('Черновик проекта успешно сохранен!');
+                    isPageDirty = false;
+                    
+                } catch (error) {
+                    console.error('Failed to save draft:', error);
+                    alert('Ошибка при сохранении черновика: ' + error.message);
+                }
+            });
+        }
+
+        const sendForApprovalBtn = document.getElementById('send-for-approval-btn');
+        if (sendForApprovalBtn) {
+            sendForApprovalBtn.addEventListener('click', () => {
+                alert('Функция "Отправить на согласование" пока не реализована');
             });
         }
 
