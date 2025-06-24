@@ -355,12 +355,12 @@ router.post('/:projectId/draft', async (req, res) => {
             `, [
                 projectId,
                 i + 1,
-                stage.stage_name || `Этап ${i + 1}`,
-                stage.stage_start_date || null,
-                stage.stage_end_date || null,
-                stage.period_type || 'month',
-                stage.period_count || 1,
-                stage.planned_revenue || 0
+                stage.stage_name || stage.name || `Этап ${i + 1}`,
+                stage.startDate || stage.stage_start_date || null,
+                stage.endDate || stage.stage_end_date || null,
+                stage.periodType || stage.period_type || 'month',
+                stage.periodCount || stage.period_count || 1,
+                stage.plannedRevenue || stage.planned_revenue || 0
             ]);
         }
 
