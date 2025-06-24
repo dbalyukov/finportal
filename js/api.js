@@ -80,6 +80,10 @@ class ApiClient {
         return await this.request(`/projects/${projectId}`);
     }
 
+    async getFullProject(projectId) {
+        return await this.request(`/projects/${projectId}/full`);
+    }
+
     async createProject(projectData) {
         return await this.request('/projects', {
             method: 'POST',
@@ -90,6 +94,13 @@ class ApiClient {
     async updateProject(projectId, projectData) {
         return await this.request(`/projects/${projectId}`, {
             method: 'PUT',
+            body: JSON.stringify(projectData)
+        });
+    }
+
+    async saveProjectDraft(projectId, projectData) {
+        return await this.request(`/projects/${projectId}/draft`, {
+            method: 'POST',
             body: JSON.stringify(projectData)
         });
     }

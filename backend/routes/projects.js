@@ -210,4 +210,198 @@ router.delete('/:projectId', async (req, res) => {
     }
 });
 
+// Get full project data (with settings, stages, and costs)
+router.get('/:projectId/full', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        
+        const connection = await pool.getConnection();
+        
+        // Get project details
+        const [projects] = await connection.execute(
+            'SELECT * FROM projects WHERE project_id = ?',
+            [projectId]
+        );
+        
+        if (projects.length === 0) {
+            connection.release();
+            return res.status(404).json({ error: 'Project not found' });
+        }
+        
+        // Get project stages
+        const [stages] = await connection.execute(
+            'SELECT * FROM project_stages WHERE project_id = ? ORDER BY stage_number',
+            [projectId]
+        );
+        
+        // Get project costs
+        const [costs] = await connection.execute(
+            'SELECT * FROM project_costs WHERE project_id = ? ORDER BY stage_number, cost_type, cost_number',
+            [projectId]
+        );
+        
+        connection.release();
+        
+        const project = projects[0];
+        
+        // Parse team settings
+        try {
+            project.project_settings_team = JSON.parse(project.project_settings_team || '[]');
+        } catch (e) {
+            project.project_settings_team = [];
+        }
+        
+        // Group costs by stage and type
+        const groupedCosts = {};
+        costs.forEach(cost => {
+            if (!groupedCosts[cost.stage_number]) {
+                groupedCosts[cost.stage_number] = {
+                    external: [],
+                    fot: [],
+                    internal: []
+                };
+            }
+            groupedCosts[cost.stage_number][cost.cost_type].push(cost);
+        });
+        
+        res.json({
+            project: project,
+            stages: stages,
+            costs: groupedCosts
+        });
+
+    } catch (error) {
+        console.error('Get full project error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Save project draft (full project data)
+router.post('/:projectId/draft', async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const { 
+            project_settings,
+            stages = [],
+            costs = {}
+        } = req.body;
+
+        const connection = await pool.getConnection();
+        
+        // Check if project exists
+        const [projects] = await connection.execute(
+            'SELECT * FROM projects WHERE project_id = ?',
+            [projectId]
+        );
+        
+        if (projects.length === 0) {
+            connection.release();
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        // Update project settings
+        await connection.execute(`
+            UPDATE projects SET 
+                project_settings_team = ?,
+                project_settings_contract_type = ?,
+                project_settings_profitability = ?,
+                project_settings_costs = ?,
+                project_settings_costs_with_nds = ?,
+                project_settings_revenue = ?,
+                project_settings_revenue_with_nds = ?,
+                project_status = 'draft'
+            WHERE project_id = ?
+        `, [
+            JSON.stringify(project_settings?.team || []),
+            project_settings?.contract_type || null,
+            project_settings?.profitability || null,
+            project_settings?.costs || null,
+            project_settings?.costs_with_nds || null,
+            project_settings?.revenue || null,
+            project_settings?.revenue_with_nds || null,
+            projectId
+        ]);
+
+        // Delete existing stages and costs
+        await connection.execute(
+            'DELETE FROM project_costs WHERE project_id = ?',
+            [projectId]
+        );
+        await connection.execute(
+            'DELETE FROM project_stages WHERE project_id = ?',
+            [projectId]
+        );
+
+        // Insert stages
+        for (let i = 0; i < stages.length; i++) {
+            const stage = stages[i];
+            await connection.execute(`
+                INSERT INTO project_stages (
+                    project_id, stage_number, stage_name, stage_start_date, 
+                    stage_end_date, period_type, period_count, planned_revenue
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                projectId,
+                i + 1,
+                stage.stage_name || `Этап ${i + 1}`,
+                stage.stage_start_date || null,
+                stage.stage_end_date || null,
+                stage.period_type || 'month',
+                stage.period_count || 1,
+                stage.planned_revenue || 0
+            ]);
+        }
+
+        // Insert costs
+        for (const stageNumber in costs) {
+            const stageCosts = costs[stageNumber];
+            
+            for (const costType of ['external', 'fot', 'internal']) {
+                if (stageCosts[costType] && Array.isArray(stageCosts[costType])) {
+                    for (let i = 0; i < stageCosts[costType].length; i++) {
+                        const cost = stageCosts[costType][i];
+                        await connection.execute(`
+                            INSERT INTO project_costs (
+                                project_id, stage_number, cost_number, cost_name, 
+                                cost_value, cost_value_for_client, cost_period, 
+                                cost_date_start, cost_date_end, cost_type, 
+                                cost_deprecation, cost_departamenet, cost_specialist_grade,
+                                cost_specialist_hour_cost, cost_specialist_hour_count, cost_service_type
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        `, [
+                            projectId,
+                            parseInt(stageNumber),
+                            i + 1,
+                            cost.cost_name || cost.name || '',
+                            cost.cost_value || cost.value || 0,
+                            cost.cost_value_for_client || cost.value_for_client || 0,
+                            cost.cost_period || cost.period || 'month',
+                            cost.cost_date_start || cost.date_start || null,
+                            cost.cost_date_end || cost.date_end || null,
+                            costType,
+                            cost.cost_deprecation || cost.deprecation || null,
+                            cost.cost_departamenet || cost.department || null,
+                            cost.cost_specialist_grade || cost.grade || null,
+                            cost.cost_specialist_hour_cost || cost.hour_cost || null,
+                            cost.cost_specialist_hour_count || cost.hour_count || null,
+                            cost.cost_service_type || cost.service_type || null
+                        ]);
+                    }
+                }
+            }
+        }
+        
+        connection.release();
+        
+        res.json({ 
+            success: true, 
+            message: 'Project draft saved successfully' 
+        });
+
+    } catch (error) {
+        console.error('Save project draft error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router; 

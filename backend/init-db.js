@@ -50,6 +50,13 @@ async function initializeDatabase() {
                 project_client VARCHAR(255) NOT NULL,
                 project_crm_integration_id VARCHAR(50),
                 project_status ENUM('draft', 'in_review', 'approved', 'rejected') DEFAULT 'draft',
+                project_settings_team JSON,
+                project_settings_contract_type VARCHAR(100),
+                project_settings_profitability VARCHAR(100),
+                project_settings_costs VARCHAR(100),
+                project_settings_costs_with_nds VARCHAR(100),
+                project_settings_revenue VARCHAR(100),
+                project_settings_revenue_with_nds VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
             )
@@ -80,10 +87,20 @@ async function initializeDatabase() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 project_id VARCHAR(20) NOT NULL,
                 stage_number INT NOT NULL,
-                cost_type ENUM('external', 'fot', 'internal') NOT NULL,
+                cost_number INT NOT NULL,
                 cost_name VARCHAR(255) NOT NULL,
                 cost_value DECIMAL(15,2) DEFAULT 0.00,
+                cost_value_for_client DECIMAL(15,2) DEFAULT 0.00,
                 cost_period VARCHAR(10) DEFAULT 'month',
+                cost_date_start VARCHAR(10),
+                cost_date_end VARCHAR(10),
+                cost_type ENUM('external', 'fot', 'internal') NOT NULL,
+                cost_deprecation VARCHAR(10),
+                cost_departamenet VARCHAR(100),
+                cost_specialist_grade VARCHAR(100),
+                cost_specialist_hour_cost DECIMAL(10,2),
+                cost_specialist_hour_count INT,
+                cost_service_type VARCHAR(100),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
@@ -156,7 +173,13 @@ async function initializeDatabase() {
                 project_kam: 'Иван Петров',
                 project_client: 'ООО "Технологии"',
                 project_crm_integration_id: 'CRM-001',
-                project_status: 'draft'
+                project_status: 'draft',
+                project_settings_contract_type: 'ПАО',
+                project_settings_profitability: '15%',
+                project_settings_costs: '1000000',
+                project_settings_costs_with_nds: '1200000',
+                project_settings_revenue: '1500000',
+                project_settings_revenue_with_nds: '1800000'
             },
             {
                 project_id: '87654321',
@@ -164,15 +187,21 @@ async function initializeDatabase() {
                 project_kam: 'Иван Петров',
                 project_client: 'ИП "Инновации"',
                 project_crm_integration_id: 'CRM-002',
-                project_status: 'in_review'
+                project_status: 'in_review',
+                project_settings_contract_type: 'Прямая продажа',
+                project_settings_profitability: '20%',
+                project_settings_costs: '2000000',
+                project_settings_costs_with_nds: '2400000',
+                project_settings_revenue: '3000000',
+                project_settings_revenue_with_nds: '3600000'
             }
         ];
 
         for (const project of sampleProjects) {
             await connection.execute(`
-                INSERT IGNORE INTO projects (project_id, project_name, project_kam, project_client, project_crm_integration_id, project_status)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `, [project.project_id, project.project_name, project.project_kam, project.project_client, project.project_crm_integration_id, project.project_status]);
+                INSERT IGNORE INTO projects (project_id, project_name, project_kam, project_client, project_crm_integration_id, project_status, project_settings_contract_type, project_settings_profitability, project_settings_costs, project_settings_costs_with_nds, project_settings_revenue, project_settings_revenue_with_nds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [project.project_id, project.project_name, project.project_kam, project.project_client, project.project_crm_integration_id, project.project_status, project.project_settings_contract_type, project.project_settings_profitability, project.project_settings_costs, project.project_settings_costs_with_nds, project.project_settings_revenue, project.project_settings_revenue_with_nds]);
         }
 
         console.log('✅ Sample projects created successfully');
