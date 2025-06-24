@@ -191,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         revenue: document.getElementById('project_settings_revenue')?.value || '',
                         revenue_with_nds: document.getElementById('project_settings_revenue_with_nds')?.value || ''
                     },
+                    project_crm_integration_id: currentProjectData?.project_crm_integration_id || document.getElementById('crm-deal-number-input')?.value || '-',
                     stages: currentProjectData?.stages || [],
                     costs: currentProjectData?.costs || {}
                 };
@@ -323,89 +324,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderProjectsTable(projects) {
-        // Helper function to highlight search terms
-        function highlightText(text, searchTerm) {
-            if (!searchTerm) return text;
-            const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            return text.replace(regex, '<mark>$1</mark>');
-        }
-
-        function updateProjectTable(filteredProjects, searchTerm = '') {
-            const tableBody = document.getElementById('projects-table').querySelector('tbody');
-            const resultsInfo = document.getElementById('search-results-info');
-            const resultsCount = document.getElementById('results-count');
-            const totalCount = document.getElementById('total-count');
-            const clearBtn = document.getElementById('clear-search-btn');
-
-            // Update results info
-            resultsCount.textContent = filteredProjects.length;
-            totalCount.textContent = projects.length;
-            
-            if (searchTerm) {
-                resultsInfo.style.display = 'block';
-                clearBtn.style.display = 'block';
-            } else {
-                resultsInfo.style.display = 'none';
-                clearBtn.style.display = 'none';
-            }
-
-            // Update table with highlighted text
-            tableBody.innerHTML = filteredProjects.map(p => `
-                <tr data-project-id="${p.project_id}">
-                    <td>${highlightText(p.project_name, searchTerm)}</td>
-                    <td>${highlightText(p.project_kam, searchTerm)}</td>
-                    <td>${highlightText(p.project_client, searchTerm)}</td>
-                    <td>${p.project_crm_integration_id || '-'}</td>
-                    <td>${highlightText(p.project_status, searchTerm)}</td>
-                </tr>
-            `).join('');
-
-            // Re-attach click handlers
-            tableBody.querySelectorAll('tr').forEach(row => {
-                row.addEventListener('click', (e) => {
-                    const projectId = e.currentTarget.dataset.projectId;
-                    const project = projects.find(p => p.project_id == projectId);
-                    guardedNavigate('costs', project);
-                });
+        const tableBody = document.querySelector('#projects-table tbody');
+        tableBody.innerHTML = '';
+        projects.forEach(project => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${project.project_name}</td>
+                <td>${project.project_kam}</td>
+                <td>${project.project_client}</td>
+                <td>${project.project_crm_integration_id}</td>
+                <td>${project.project_status}</td>
+            `;
+            row.addEventListener('click', () => {
+                // Передаем объект проекта, чтобы не создавать новый
+                guardedNavigate('costs', project);
             });
-        }
-
-        // Initial table setup
-        updateProjectTable(projects);
-        
-        const searchInput = document.getElementById('search-input');
-        const clearSearchBtn = document.getElementById('clear-search-btn');
-
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase().trim();
-            
-            if (searchTerm === '') {
-                updateProjectTable(projects);
-                return;
-            }
-
-            const filteredProjects = projects.filter(p => 
-                p.project_name.toLowerCase().includes(searchTerm) ||
-                p.project_kam.toLowerCase().includes(searchTerm) ||
-                p.project_client.toLowerCase().includes(searchTerm) ||
-                p.project_status.toLowerCase().includes(searchTerm)
-            );
-            
-            updateProjectTable(filteredProjects, searchTerm);
-        });
-
-        clearSearchBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            updateProjectTable(projects);
-            searchInput.focus();
-        });
-
-        // Keyboard shortcuts
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                searchInput.value = '';
-                updateProjectTable(projects);
-            }
+            tableBody.appendChild(row);
         });
     }
 
@@ -416,8 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const fullData = await apiClient.getFullProject(project.project_id);
                 currentProjectData = {
+                    ...currentProjectData, // сохраняем возможные флаги
                     projectId: project.project_id,
-                    isCreated: true,
+                    isCreated: true, // обязательно выставляем!
                     isLoadedFromServer: true,
                     team: (fullData.project.project_settings_team || []),
                     stages: fullData.stages || [],
@@ -436,8 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error('Ошибка загрузки данных проекта:', err);
             }
         }
-        const isNewProject = project === null;
-        const projectId = isNewProject ? Math.floor(10000000 + Math.random() * 90000000) : project.project_id;
+        const isNewProject = !project || !project.project_id;
+        let projectId = isNewProject ? null : project.project_id;
         
         const editRoles = ['key_account_manager', 'calc_manager', 'admin'];
         const isReadOnly = !editRoles.includes(currentUser.user_role);
@@ -613,13 +548,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add event listeners for action buttons
         const saveDraftBtn = document.getElementById('save-draft-btn');
         if (saveDraftBtn) {
+            let isSavingDraft = false;
             saveDraftBtn.addEventListener('click', async () => {
+                if (isSavingDraft) return; // Блокируем повторное нажатие
+                isSavingDraft = true;
+                saveDraftBtn.disabled = true;
                 try {
                     captureCostData();
-                    // Проверяем, есть ли projectId и был ли проект создан
                     let projectId = currentProjectData?.projectId;
                     if (!currentProjectData?.isCreated) {
-                        // Создаём проект через API
+                        // Создаём проект через API только если он ещё не был создан
                         const projectPayload = {
                             project_name: document.getElementById('project-name-input')?.value || 'Без названия',
                             project_kam: currentUser?.user_name || '',
@@ -644,6 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             revenue: document.getElementById('project_settings_revenue')?.value || '',
                             revenue_with_nds: document.getElementById('project_settings_revenue_with_nds')?.value || ''
                         },
+                        project_crm_integration_id: currentProjectData?.project_crm_integration_id || document.getElementById('crm-deal-number-input')?.value || '-',
                         stages: currentProjectData?.stages || [],
                         costs: currentProjectData?.costs || {}
                     };
@@ -653,6 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) {
                     console.error('Failed to save draft:', error);
                     alert('Ошибка при сохранении черновика: ' + error.message);
+                } finally {
+                    isSavingDraft = false;
+                    saveDraftBtn.disabled = false;
                 }
             });
         }
@@ -1209,6 +1151,7 @@ document.addEventListener('DOMContentLoaded', () => {
             startDate: row.querySelector('[data-field="stage-start-date"]').value,
             endDate: row.querySelector('[data-field="stage-end-date"]').value,
             periodType: row.querySelector('[data-field="stage-period-type"]').value,
+            periodCount: row.querySelector('[data-field="stage-period-count"]').value,
             plannedRevenue: getNum(row.querySelector('[data-field="stage-revenue"]')),
         }));
 
@@ -1255,8 +1198,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
    
         currentProjectData = {
-            projectId: page.querySelector('#main-info-card input').value,
+            ...currentProjectData, // сохраняем возможные флаги
+            projectId: currentProjectData?.projectId,
+            isCreated: currentProjectData?.isCreated,
             projectName: page.querySelector('#project-name-input').value,
+            project_crm_integration_id: getVal(page.querySelector('#crm-deal-number-input')),
             stages,
             costs,
             mainIndicators: {

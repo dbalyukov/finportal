@@ -280,10 +280,14 @@ router.get('/:projectId/full', async (req, res) => {
 router.post('/:projectId/draft', async (req, res) => {
     try {
         const { projectId } = req.params;
-        const { 
+        const {
             project_settings,
             stages = [],
-            costs = {}
+            costs = {},
+            project_crm_integration_id,
+            project_name,
+            project_kam,
+            project_client
         } = req.body;
 
         const connection = await pool.getConnection();
@@ -302,6 +306,10 @@ router.post('/:projectId/draft', async (req, res) => {
         // Update project settings
         await connection.execute(`
             UPDATE projects SET 
+                project_name = ?,
+                project_kam = ?,
+                project_client = ?,
+                project_crm_integration_id = ?,
                 project_settings_team = ?,
                 project_settings_contract_type = ?,
                 project_settings_profitability = ?,
@@ -312,6 +320,10 @@ router.post('/:projectId/draft', async (req, res) => {
                 project_status = 'draft'
             WHERE project_id = ?
         `, [
+            project_name || projects[0].project_name,
+            project_kam || projects[0].project_kam,
+            project_client || projects[0].project_client,
+            project_crm_integration_id || projects[0].project_crm_integration_id,
             JSON.stringify(project_settings?.team || []),
             project_settings?.contract_type || null,
             project_settings?.profitability || null,
