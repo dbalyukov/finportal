@@ -409,8 +409,33 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderCostCalculation(project) {
+    async function renderCostCalculation(project) {
         isPageDirty = false;
+        // Если есть project_id и нет currentProjectData или данные не были загружены, грузим с сервера
+        if (project && project.project_id && (!currentProjectData || currentProjectData.projectId !== project.project_id || !currentProjectData.isLoadedFromServer)) {
+            try {
+                const fullData = await apiClient.getFullProject(project.project_id);
+                currentProjectData = {
+                    projectId: project.project_id,
+                    isCreated: true,
+                    isLoadedFromServer: true,
+                    team: (fullData.project.project_settings_team || []),
+                    stages: fullData.stages || [],
+                    costs: fullData.costs || {},
+                    contract_type: fullData.project.project_settings_contract_type || '',
+                    profitability: fullData.project.project_settings_profitability || '',
+                    costs_val: fullData.project.project_settings_costs || '',
+                    costs_with_nds: fullData.project.project_settings_costs_with_nds || '',
+                    revenue: fullData.project.project_settings_revenue || '',
+                    revenue_with_nds: fullData.project.project_settings_revenue_with_nds || ''
+                };
+                // Повторно вызываем рендер с уже загруженными данными
+                await renderCostCalculation({ ...project });
+                return;
+            } catch (err) {
+                console.error('Ошибка загрузки данных проекта:', err);
+            }
+        }
         const isNewProject = project === null;
         const projectId = isNewProject ? Math.floor(10000000 + Math.random() * 90000000) : project.project_id;
         
@@ -435,7 +460,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ${actionButtonsHTML}
         `;
         
-        const stages = isNewProject ? [] : project_stage.filter(s => s.project_id === project.project_id);
+        // Используем данные из currentProjectData, если они есть
+        const stages = currentProjectData?.stages && currentProjectData.stages.length > 0
+            ? currentProjectData.stages
+            : (isNewProject ? [] : project_stage.filter(s => s.project_id === project.project_id));
+
+        const teamMembers = currentProjectData?.team || [];
+        const contractType = currentProjectData?.contract_type || (project?.project_settings_contract_type || '');
+        const profitability = currentProjectData?.profitability || (project?.project_settings_profitability || '');
+        const costs = currentProjectData?.costs_val || (project?.project_settings_costs || '');
+        const costsWithNds = currentProjectData?.costs_with_nds || (project?.project_settings_costs_with_nds || '');
+        const revenue = currentProjectData?.revenue || (project?.project_settings_revenue || '');
+        const revenueWithNds = currentProjectData?.revenue_with_nds || (project?.project_settings_revenue_with_nds || '');
 
         const pageContent = `
             <div class="cost-calculation-page">
@@ -458,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="form-row team-row">
                                 ${teamButtonHTML}
                                 <div id="team-display" class="team-display-container">
-                                    <!-- Selected team members will appear here -->
+                                    ${teamMembers.map(member => `<div class='team-member-tag'>${member}</div>`).join('')}
                                 </div>
                             </div>
                         </div>
@@ -471,28 +507,28 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="form-field">
                                 <label>Тип контрактования</label>
                                 <select id="project_settings_contract_type">
-                                    ${contract_types.map(type => `<option value="${type}">${type}</option>`).join('')}
+                                    ${contract_types.map(type => `<option value="${type}" ${type === contractType ? 'selected' : ''}>${type}</option>`).join('')}
                                 </select>
                             </div>
                             <div class="form-field">
                                 <label>Требуемая рентабельность, %</label>
-                                <input type="number" id="project_settings_profitability" value="0">
+                                <input type="number" id="project_settings_profitability" value="${profitability}">
                             </div>
                             <div class="form-field">
                                 <label>Затраты проекта без НДС</label>
-                                <input type="text" id="project_settings_costs" value="0.00 руб." disabled>
+                                <input type="text" id="project_settings_costs" value="${costs}" disabled>
                             </div>
                             <div class="form-field">
                                 <label>Затраты проекта с НДС</label>
-                                <input type="text" id="project_settings_costs_with_nds" value="0.00 руб." disabled>
+                                <input type="text" id="project_settings_costs_with_nds" value="${costsWithNds}" disabled>
                             </div>
                             <div class="form-field">
                                 <label>Расчетная выручка без НДС</label>
-                                <input type="text" id="project_settings_revenue" value="0.00 руб." disabled>
+                                <input type="text" id="project_settings_revenue" value="${revenue}" disabled>
                             </div>
                             <div class="form-field">
                                 <label>Расчетная выручка с НДС</label>
-                                <input type="text" id="project_settings_revenue_with_nds" value="0.00 руб." disabled>
+                                <input type="text" id="project_settings_revenue_with_nds" value="${revenueWithNds}" disabled>
                             </div>
                         </div>
                     </div>
@@ -517,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </tr>
                         </thead>
                         <tbody id="stages-table-body">
-                            ${stages.map(s => renderStageRow(s, `${s.project_id}-${s.stage_number}`, isReadOnly)).join('')}
+                            ${stages.map(s => renderStageRow(s, `${s.project_id || s.id || ''}-${s.stage_number || s.number || ''}`, isReadOnly)).join('')}
                         </tbody>
                     </table>
                 </div>
