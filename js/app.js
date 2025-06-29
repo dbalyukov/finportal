@@ -982,6 +982,73 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Функция для распределения периодических затрат по годам
+    function distributePeriodicValue(cost, valueField) {
+        const result = {};
+        const value = parseFloat(cost[valueField]) || 0;
+        
+        if (!cost.cost_date_start) {
+            return result;
+        }
+        
+        // Парсим дату начала
+        let startDate;
+        if (cost.cost_date_start.includes('.')) {
+            // Формат DD.MM.YYYY
+            const parts = cost.cost_date_start.split('.');
+            startDate = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else if (cost.cost_date_start.includes('-')) {
+            // Формат YYYY-MM-DD
+            startDate = new Date(cost.cost_date_start);
+        } else {
+            return result;
+        }
+        
+        // Парсим дату окончания
+        let endDate = null;
+        if (cost.cost_date_end && cost.cost_date_end !== '-') {
+            if (cost.cost_date_end.includes('.')) {
+                const parts = cost.cost_date_end.split('.');
+                endDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            } else if (cost.cost_date_end.includes('-')) {
+                endDate = new Date(cost.cost_date_end);
+            }
+        }
+        
+        // Если нет даты окончания или разовая затрата, распределяем только по году начала
+        if (!endDate || cost.cost_period === 'Разовый') {
+            const year = startDate.getFullYear();
+            result[year] = value;
+            return result;
+        }
+        
+        // Для периодических затрат распределяем по годам
+        const startYear = startDate.getFullYear();
+        const endYear = endDate.getFullYear();
+        
+        for (let year = startYear; year <= endYear; year++) {
+            let yearValue = 0;
+            
+            if (cost.cost_period === 'Ежегодный') {
+                // Ежегодные затраты - полная стоимость за год
+                yearValue = value;
+            } else if (cost.cost_period === 'Ежемесячный') {
+                // Ежемесячные затраты - 12 * месячная стоимость
+                yearValue = value * 12;
+            } else if (cost.cost_period === 'Ежеквартально') {
+                // Ежеквартальные затраты - 4 * квартальная стоимость
+                yearValue = value * 4;
+            } else {
+                // По умолчанию - полная стоимость
+                yearValue = value;
+            }
+            
+            result[year] = yearValue;
+        }
+        
+        return result;
+    }
+
     function generateSummaryHTML(data, years) {
         const { stages, costs } = data;
 
