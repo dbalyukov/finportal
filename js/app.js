@@ -18,6 +18,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function guardedNavigate(page, data = null) {
+        // Специальная обработка для перехода на Проектную калькуляцию - всегда разрешаем
+        if (page === 'calculation') {
+            if (app.querySelector('.cost-calculation-page')) {
+                captureCostData(); // Сохраняем данные, но не показываем модальное окно
+            }
+            guardedNavigateToCalculation(data);
+            return;
+        }
+        
+        // Для остальных страниц - стандартная логика с модальным окном
         if (app.querySelector('.cost-calculation-page') && isPageDirty) {
             captureCostData(); // Capture data before showing modal
             navigationTarget = { page, data };
@@ -26,11 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (app.querySelector('.cost-calculation-page')) {
                 captureCostData();
             }
-            if (page === 'calculation') {
-                guardedNavigateToCalculation(data);
-            } else {
-                navigate(page, data);
-            }
+            navigate(page, data);
         }
     }
 
