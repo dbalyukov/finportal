@@ -777,16 +777,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderStageCosts(stage, project, isReadOnly = false) {
-        const costs = project ? project_cost.filter(c => c.stage_number === stage.stage_number) : [];
+        // Используем данные из currentProjectData.costs, если они есть, иначе из хардкода
+        let costs = [];
+        const stageNumber = stage.stage_number || stage.number || 1;
+        
+        if (currentProjectData && currentProjectData.costs && currentProjectData.costs[stageNumber]) {
+            // Данные из currentProjectData
+            const stageCosts = currentProjectData.costs[stageNumber];
+            costs = [
+                ...(stageCosts.external || []).map(c => ({ ...c, cost_type: 'Внешние закупки' })),
+                ...(stageCosts.fot || []).map(c => ({ ...c, cost_type: 'ФОТ' })),
+                ...(stageCosts.internal || []).map(c => ({ ...c, cost_type: 'Внутренние продукты' }))
+            ];
+        } else {
+            // Fallback к хардкоду
+            costs = project ? project_cost.filter(c => c.stage_number === stageNumber) : [];
+        }
+        
         const externalCosts = costs.filter(c => c.cost_type === 'Внешние закупки');
         const fotCosts = costs.filter(c => c.cost_type === 'ФОТ');
         const internalCosts = costs.filter(c => c.cost_type === 'Внутренние продукты');
-        const stageId = project ? `${project.project_id}-${stage.stage_number}` : stage.stage_number;
+        const stageId = project ? `${project.project_id}-${stageNumber}` : stageNumber;
         const deleteColumnHeader = !isReadOnly ? '<th></th>' : '';
     
         return `
             <div class="stage-costs-block card" data-stage-id="${stageId}">
-                <h3>Этап: ${stage.stage_name || 'Новый этап'}</h3>
+                <h3>Этап: ${stage.stage_name || stage.name || 'Новый этап'}</h3>
                 <div class="costs-grid">
                     <div class="card">
                         <div class="card-header">
@@ -1145,56 +1161,82 @@ document.addEventListener('DOMContentLoaded', () => {
         const getVal = (el) => el ? el.value : null;
         const getNum = (el) => parseFloat(getVal(el) || 0);
 
+        // Функция для преобразования даты из YYYY-MM-DD в DD.MM.YYYY
+        const formatDateForServer = (dateStr) => {
+            if (!dateStr) return '';
+            if (dateStr.includes('-')) {
+                // Формат YYYY-MM-DD -> DD.MM.YYYY
+                const parts = dateStr.split('-');
+                if (parts.length === 3) {
+                    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+                }
+            }
+            return dateStr;
+        };
+
         const stages = Array.from(page.querySelectorAll('#stages-table-body tr')).map(row => ({
             id: row.dataset.stageId,
             name: row.querySelector('[data-field="stage-name"]').value,
-            startDate: row.querySelector('[data-field="stage-start-date"]').value,
-            endDate: row.querySelector('[data-field="stage-end-date"]').value,
+            startDate: formatDateForServer(row.querySelector('[data-field="stage-start-date"]').value),
+            endDate: formatDateForServer(row.querySelector('[data-field="stage-end-date"]').value),
             periodType: row.querySelector('[data-field="stage-period-type"]').value,
             periodCount: row.querySelector('[data-field="stage-period-count"]').value,
             plannedRevenue: getNum(row.querySelector('[data-field="stage-revenue"]')),
         }));
 
-        const costs = [];
+        // Группируем затраты по этапам и типам
+        const costsByStage = {};
         page.querySelectorAll('.stage-costs-block').forEach(stageBlock => {
             const stageId = stageBlock.dataset.stageId;
+            const stageNumber = stageId.split('-').pop(); // Получаем номер этапа
+            
+            if (!costsByStage[stageNumber]) {
+                costsByStage[stageNumber] = {
+                    external: [],
+                    fot: [],
+                    internal: []
+                };
+            }
 
-            stageBlock.querySelectorAll('.external-cost-row').forEach(row => costs.push({
-                stageId,
-                type: 'Внешние закупки',
-                name: row.querySelector('input:first-child').value,
-                startDate: row.querySelector('[data-field="start-date"]').value,
-                endDate: row.querySelector('[data-field="end-date"]').value,
-                periodicity: row.querySelector('[data-field="periodicity"]').value,
-                cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
-                costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
-            }));
+            // Внешние закупки
+            stageBlock.querySelectorAll('.external-cost-row').forEach(row => {
+                costsByStage[stageNumber].external.push({
+                    name: row.querySelector('input:first-child').value,
+                    startDate: formatDateForServer(row.querySelector('[data-field="start-date"]').value),
+                    endDate: formatDateForServer(row.querySelector('[data-field="end-date"]').value),
+                    periodicity: row.querySelector('[data-field="periodicity"]').value,
+                    cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
+                    costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
+                });
+            });
 
-            stageBlock.querySelectorAll('.fot-cost-row').forEach(row => costs.push({
-                stageId,
-                type: 'ФОТ',
-                name: row.querySelector('input:first-child').value,
-                startDate: row.querySelector('[data-field="start-date"]').value,
-                endDate: row.querySelector('[data-field="end-date"]').value,
-                periodicity: row.querySelector('[data-field="periodicity"]').value,
-                department: row.querySelector('[data-field="department"]').value,
-                grade: row.querySelector('[data-field="grade"]').value,
-                hours: getNum(row.querySelector('[data-field="hours"]')),
-                cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
-                costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
-            }));
+            // ФОТ
+            stageBlock.querySelectorAll('.fot-cost-row').forEach(row => {
+                costsByStage[stageNumber].fot.push({
+                    name: row.querySelector('input:first-child').value,
+                    startDate: formatDateForServer(row.querySelector('[data-field="start-date"]').value),
+                    endDate: formatDateForServer(row.querySelector('[data-field="end-date"]').value),
+                    periodicity: row.querySelector('[data-field="periodicity"]').value,
+                    department: row.querySelector('[data-field="department"]').value,
+                    grade: row.querySelector('[data-field="grade"]').value,
+                    hours: getNum(row.querySelector('[data-field="hours"]')),
+                    cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
+                    costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
+                });
+            });
 
-            stageBlock.querySelectorAll('.internal-cost-row').forEach(row => costs.push({
-                stageId,
-                type: 'internal',
-                name: row.querySelector('input:first-child').value,
-                startDate: row.querySelector('[data-field="start-date"]').value,
-                endDate: row.querySelector('[data-field="end-date"]').value,
-                periodicity: row.querySelector('[data-field="periodicity"]').value,
-                serviceType: row.querySelector('[data-field="service-type"]').value,
-                cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
-                costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
-            }));
+            // Внутренние продукты
+            stageBlock.querySelectorAll('.internal-cost-row').forEach(row => {
+                costsByStage[stageNumber].internal.push({
+                    name: row.querySelector('input:first-child').value,
+                    startDate: formatDateForServer(row.querySelector('[data-field="start-date"]').value),
+                    endDate: formatDateForServer(row.querySelector('[data-field="end-date"]').value),
+                    periodicity: row.querySelector('[data-field="periodicity"]').value,
+                    serviceType: row.querySelector('[data-field="service-type"]').value,
+                    cost: parseFloat(row.querySelector('[data-field="cost"]').value || 0),
+                    costForClient: parseFloat(row.querySelector('[data-field="cost-for-client"]').value || 0),
+                });
+            });
         });
    
         currentProjectData = {
@@ -1204,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             projectName: page.querySelector('#project-name-input').value,
             project_crm_integration_id: getVal(page.querySelector('#crm-deal-number-input')),
             stages,
-            costs,
+            costs: costsByStage,
             mainIndicators: {
                 profitability: getNum('#project_settings_profitability'),
             },
@@ -1263,8 +1305,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderStageRow(stage = {}, stageId, isReadOnly = false) {
         const stageName = stage.name || stage.stage_name || '';
-        const startDate = stage.startDate || (stage.stage_date_start ? stage.stage_date_start.split('.').reverse().join('-') : '');
-        const endDate = stage.endDate || (stage.stage_date_end ? stage.stage_date_end.split('.').reverse().join('-') : '');
+        
+        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        const formatDateForInput = (dateStr) => {
+            if (!dateStr) return '';
+            if (dateStr.includes('.')) {
+                // Формат DD.MM.YYYY -> YYYY-MM-DD
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            return dateStr;
+        };
+        
+        const startDate = formatDateForInput(stage.startDate || stage.stage_start_date || '');
+        const endDate = formatDateForInput(stage.endDate || stage.stage_end_date || '');
         const periodType = stage.periodType || stage.stage_period_type || 'Месяц';
         const plannedRevenue = stage.plannedRevenue || stage.stage_planned_revenue || 0;
         const disabled = isReadOnly ? 'disabled' : '';
@@ -1287,62 +1343,104 @@ document.addEventListener('DOMContentLoaded', () => {
         return `
             <tr data-stage-id="${stageId}">
                 <td><input type="text" data-field="stage-name" class="form-field" value="${stageName}" placeholder="Название этапа" ${disabled}></td>
-                <td><input type="date" class="form-field" data-field="stage-start-date" value="${stage.stage_date_start ? new Date(stage.stage_date_start.split('.').reverse().join('-')).toISOString().split('T')[0] : ''}" ${disabled}></td> 
-                <td><input type="date" class="form-field" data-field="stage-end-date" value="${stage.stage_date_end ? new Date(stage.stage_date_end.split('.').reverse().join('-')).toISOString().split('T')[0] : ''}" ${disabled}></td>
-                <td><select class="form-field" data-field="stage-period-type" ${disabled}>${periodTypes.map(p => `<option ${p === (stage.periodType || stage.stage_period_type) ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
-                <td><input type="number" class="form-field" data-field="stage-period-count" value="${stage.periodCount || stage.stage_period_count || 0}" disabled></td>
-                <td><input type="text" class="form-field" data-field="stage-revenue" value="${formatCurrency(stage.plannedRevenue || stage.stage_planned_revenue || 0)}" disabled></td>
+                <td><input type="date" class="form-field" data-field="stage-start-date" value="${startDate}" ${disabled}></td> 
+                <td><input type="date" class="form-field" data-field="stage-end-date" value="${endDate}" ${disabled}></td>
+                <td><select class="form-field" data-field="stage-period-type" ${disabled}>${periodTypes.map(p => `<option ${p === periodType ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
+                <td><input type="number" class="form-field" data-field="stage-period-count" value="${periodCount}" disabled></td>
+                <td><input type="text" class="form-field" data-field="stage-revenue" value="${formatCurrency(plannedRevenue)}" disabled></td>
                 ${!isReadOnly ? `<td><button class="btn btn-danger delete-stage-btn">Удалить</button></td>` : ''}
             </tr>
         `;
     }
 
     function renderExternalCostRow(cost = {}, isReadOnly = false) {
-        const isOneTime = (cost.cost_period || 'Разовое') === 'Разовое';
+        const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
+        
+        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        const formatDateForInput = (dateStr) => {
+            if (!dateStr) return '';
+            if (dateStr.includes('.')) {
+                // Формат DD.MM.YYYY -> YYYY-MM-DD
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            return dateStr;
+        };
+        
         return `
             <tr class="external-cost-row">
-                <td><input type="text" class="form-field" value="${cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="text" class="form-field" value="${cost.name || cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.startDate || cost.cost_date_start || '')}" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.endDate || cost.cost_date_end || '')}" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
                 <td><select class="form-field" data-field="type" ${isReadOnly ? 'disabled' : ''}>${external_cost_types.map(o => `<option ${cost.cost_type === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${cost.cost_period === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost || 0}" data-field="cost" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost_for_client || 0}" data-field="cost-for-client" disabled></td>
+                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${(cost.periodicity || cost.cost_period) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><input type="number" class="form-field" value="${cost.cost || cost.cost_value || 0}" data-field="cost" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="number" class="form-field" value="${cost.costForClient || cost.cost_value_for_client || 0}" data-field="cost-for-client" disabled></td>
                 ${!isReadOnly ? `<td><button class="btn btn-danger delete-cost-btn">Удалить</button></td>` : ''}
             </tr>
         `;
     }
     
     function renderFotCostRow(cost = {}, isReadOnly = false) {
-        const isOneTime = (cost.cost_period || 'Разовое') === 'Разовое';
+        const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
+        
+        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        const formatDateForInput = (dateStr) => {
+            if (!dateStr) return '';
+            if (dateStr.includes('.')) {
+                // Формат DD.MM.YYYY -> YYYY-MM-DD
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            return dateStr;
+        };
+        
         return `
             <tr class="fot-cost-row">
-                <td><input type="text" class="form-field" value="${cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
-                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${cost.cost_period === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><select class="form-field" data-field="department" ${isReadOnly ? 'disabled' : ''}>${fot_departments.map(o => `<option ${cost.cost_departamenet === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><select class="form-field" data-field="grade" ${isReadOnly ? 'disabled' : ''}>${fot_grades.map(o => `<option ${cost.cost_specialist_grade === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><input type="text" class="form-field" value="${cost.name || cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.startDate || cost.cost_date_start || '')}" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.endDate || cost.cost_date_end || '')}" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
+                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${(cost.periodicity || cost.cost_period) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><select class="form-field" data-field="department" ${isReadOnly ? 'disabled' : ''}>${fot_departments.map(o => `<option ${(cost.department || cost.cost_departamenet) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><select class="form-field" data-field="grade" ${isReadOnly ? 'disabled' : ''}>${fot_grades.map(o => `<option ${(cost.grade || cost.cost_specialist_grade) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
                 <td><input type="number" class="form-field" value="${cost.cost_specialist_hour_cost || 0}" data-field="rate" disabled></td>
-                <td><input type="number" class="form-field" value="${cost.cost_specialist_hour_count || 0}" data-field="hours" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost || 0}" data-field="cost" disabled></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost_for_client || 0}" data-field="cost-for-client" disabled></td>
+                <td><input type="number" class="form-field" value="${cost.hours || cost.cost_specialist_hour_count || 0}" data-field="hours" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="number" class="form-field" value="${cost.cost || cost.cost_value || 0}" data-field="cost" disabled></td>
+                <td><input type="number" class="form-field" value="${cost.costForClient || cost.cost_value_for_client || 0}" data-field="cost-for-client" disabled></td>
                 ${!isReadOnly ? `<td><button class="btn btn-danger delete-cost-btn">Удалить</button></td>` : ''}
             </tr>
         `;
     }
     
     function renderInternalCostRow(cost = {}, isReadOnly = false) {
-        const isOneTime = (cost.cost_period || 'Разовое') === 'Разовое';
+        const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
+        
+        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        const formatDateForInput = (dateStr) => {
+            if (!dateStr) return '';
+            if (dateStr.includes('.')) {
+                // Формат DD.MM.YYYY -> YYYY-MM-DD
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            return dateStr;
+        };
+        
         return `
             <tr class="internal-cost-row">
-                <td><input type="text" class="form-field" value="${cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="date" class="form-field" value="" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
-                <td><select class="form-field" data-field="service-type" ${isReadOnly ? 'disabled' : ''}>${internal_service_types.map(o => `<option ${cost.cost_service_type === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${cost.cost_period === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost || 0}" data-field="cost" ${isReadOnly ? 'disabled' : ''}></td>
-                <td><input type="number" class="form-field" value="${cost.cost_cost_for_client || 0}" data-field="cost-for-client" disabled></td>
+                <td><input type="text" class="form-field" value="${cost.name || cost.cost_name || ''}" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.startDate || cost.cost_date_start || '')}" data-field="start-date" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="date" class="form-field" value="${formatDateForInput(cost.endDate || cost.cost_date_end || '')}" data-field="end-date" ${isOneTime ? 'disabled' : ''} ${isReadOnly ? 'disabled' : ''}></td>
+                <td><select class="form-field" data-field="service-type" ${isReadOnly ? 'disabled' : ''}>${internal_service_types.map(o => `<option ${(cost.serviceType || cost.cost_service_type) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><select class="form-field" data-field="periodicity" ${isReadOnly ? 'disabled' : ''}>${cost_periods.map(o => `<option ${(cost.periodicity || cost.cost_period) === o ? 'selected': ''}>${o}</option>`).join('')}</select></td>
+                <td><input type="number" class="form-field" value="${cost.cost || cost.cost_value || 0}" data-field="cost" ${isReadOnly ? 'disabled' : ''}></td>
+                <td><input type="number" class="form-field" value="${cost.costForClient || cost.cost_value_for_client || 0}" data-field="cost-for-client" disabled></td>
                 ${!isReadOnly ? `<td><button class="btn btn-danger delete-cost-btn">Удалить</button></td>` : ''}
             </tr>
         `;

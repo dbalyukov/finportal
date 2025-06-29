@@ -392,19 +392,19 @@ router.post('/:projectId/draft', async (req, res) => {
                             projectId,
                             parseInt(stageNumber),
                             i + 1,
-                            cost.cost_name || cost.name || '',
-                            cost.cost_value || cost.value || 0,
-                            cost.cost_value_for_client || cost.value_for_client || 0,
-                            cost.cost_period || cost.period || 'month',
-                            cost.cost_date_start || cost.date_start || null,
-                            cost.cost_date_end || cost.date_end || null,
+                            cost.name || cost.cost_name || '',
+                            cost.cost || cost.cost_value || cost.value || 0,
+                            cost.costForClient || cost.cost_value_for_client || cost.value_for_client || 0,
+                            cost.periodicity || cost.cost_period || cost.period || 'month',
+                            cost.startDate || cost.cost_date_start || cost.date_start || null,
+                            cost.endDate || cost.cost_date_end || cost.date_end || null,
                             costType,
                             cost.cost_deprecation || cost.deprecation || null,
-                            cost.cost_departamenet || cost.department || null,
-                            cost.cost_specialist_grade || cost.grade || null,
+                            cost.department || cost.cost_departamenet || null,
+                            cost.grade || cost.cost_specialist_grade || null,
                             cost.cost_specialist_hour_cost || cost.hour_cost || null,
-                            cost.cost_specialist_hour_count || cost.hour_count || null,
-                            cost.cost_service_type || cost.service_type || null
+                            cost.hours || cost.cost_specialist_hour_count || cost.hour_count || null,
+                            cost.serviceType || cost.cost_service_type || null
                         ]);
                     }
                 }
