@@ -244,14 +244,13 @@ router.get('/:projectId/full', async (req, res) => {
         
         const project = projects[0];
         
-        // Parse team settings
-        console.log('Raw team data from DB:', project.project_settings_team);
-        try {
-            project.project_settings_team = JSON.parse(project.project_settings_team || '[]');
-            console.log('Parsed team data:', project.project_settings_team);
-        } catch (e) {
-            console.log('Error parsing team data:', e.message);
-            project.project_settings_team = [];
+        // Parse team settings (fix for JSON type)
+        if (!Array.isArray(project.project_settings_team)) {
+            try {
+                project.project_settings_team = JSON.parse(project.project_settings_team || '[]');
+            } catch (e) {
+                project.project_settings_team = [];
+            }
         }
         
         // Group costs by stage and type
