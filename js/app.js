@@ -983,9 +983,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Функция для распределения периодических затрат по годам
-    function distributePeriodicValue(cost, valueField) {
+    function distributePeriodicValue(cost, valueFields) {
         const result = {};
-        const value = parseFloat(cost[valueField]) || 0;
+        // valueFields теперь массив, ищем первое не пустое значение
+        let value = 0;
+        for (const field of valueFields) {
+            value = parseFloat(
+                (cost[field] || '').toString().replace(/[^0-9.,-]/g, '').replace(/\s/g, '').replace(',', '.')
+            );
+            if (!isNaN(value) && value !== 0) break;
+        }
+        value = value || 0;
         
         if (!cost.cost_date_start) {
             return result;
@@ -998,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const parts = cost.cost_date_start.split('.');
             startDate = new Date(parts[2], parts[1] - 1, parts[0]);
         } else if (cost.cost_date_start.includes('-')) {
-            // Формат YYYY-MM-DD
+            // Формат YYYY-MM-DD или ISO
             startDate = new Date(cost.cost_date_start);
         } else {
             return result;
@@ -1011,14 +1019,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parts = cost.cost_date_end.split('.');
                 endDate = new Date(parts[2], parts[1] - 1, parts[0]);
             } else if (cost.cost_date_end.includes('-')) {
+                // Формат YYYY-MM-DD или ISO
                 endDate = new Date(cost.cost_date_end);
             }
         }
         
         // Если нет даты окончания или разовая затрата, распределяем только по году начала
-        if (!endDate || cost.cost_period === 'Разовый') {
+        if (!endDate || cost.cost_period === 'Разовое') {
             const year = startDate.getFullYear();
-            result[year] = value;
+            console.log('distributePeriodicValue: year', year, 'value', value, 'cost', cost);
+            result[String(year)] = value;
             return result;
         }
         
@@ -1043,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 yearValue = value;
             }
             
-            result[year] = yearValue;
+            result[String(year)] = yearValue;
         }
         
         return result;
@@ -1060,35 +1070,54 @@ document.addEventListener('DOMContentLoaded', () => {
             ...(stage.internal || [])
           ]);
 
-        // Выручка от внутренних продуктов
+        // ВРЕМЕННЫЙ ЛОГ ДЛЯ ОТЛАДКИ
+        console.log('allCosts:', allCosts);
+        if (allCosts.length > 0) {
+            console.log('allCosts[0]:', allCosts[0]);
+        }
+
+        // --- INTERNAL ---
+        const internalCosts = allCosts.filter(c => c.cost_type === 'internal');
+        console.log('internalCosts:', internalCosts);
         const revenue = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-        allCosts.filter(c => c.cost_type === 'internal').forEach(cost => {
-            const values = distributePeriodicValue(cost, 'cost_value_for_client');
+        internalCosts.forEach(cost => {
+            const values = distributePeriodicValue(cost, ['cost_value_for_client', 'costForClient']);
+            console.log('internal cost:', cost, 'distributed values:', values);
             years.forEach(y => revenue[y] += parseFloat(values[y]) || 0);
         });
+        console.log('revenue by year:', revenue);
         const revenueItems = { 'Выручка от внутренних продуктов': revenue };
 
-        // Прямые затраты (себестоимость внутренних продуктов)
         const direct = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-        allCosts.filter(c => c.cost_type === 'internal').forEach(cost => {
-            const values = distributePeriodicValue(cost, 'cost_value');
+        internalCosts.forEach(cost => {
+            const values = distributePeriodicValue(cost, ['cost_value', 'cost']);
+            console.log('internal direct cost:', cost, 'distributed values:', values);
             years.forEach(y => direct[y] += parseFloat(values[y]) || 0);
         });
+        console.log('direct by year:', direct);
         const directCostItems = { 'Себестоимость внутренних продуктов': direct };
 
-        // ФОТ
+        // --- FOT ---
+        const fotCosts = allCosts.filter(c => c.cost_type === 'fot');
+        console.log('fotCosts:', fotCosts);
         const fot = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-        allCosts.filter(c => c.cost_type === 'fot').forEach(cost => {
-            const values = distributePeriodicValue(cost, 'cost_value');
+        fotCosts.forEach(cost => {
+            const values = distributePeriodicValue(cost, ['cost_value', 'cost']);
+            console.log('fot cost:', cost, 'distributed values:', values);
             years.forEach(y => fot[y] += parseFloat(values[y]) || 0);
         });
+        console.log('fot by year:', fot);
 
-        // Внешние закупки
+        // --- EXTERNAL ---
+        const externalCosts = allCosts.filter(c => c.cost_type === 'external');
+        console.log('externalCosts:', externalCosts);
         const external = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-        allCosts.filter(c => c.cost_type === 'external').forEach(cost => {
-            const values = distributePeriodicValue(cost, 'cost_value');
+        externalCosts.forEach(cost => {
+            const values = distributePeriodicValue(cost, ['cost_value', 'cost']);
+            console.log('external cost:', cost, 'distributed values:', values);
             years.forEach(y => external[y] += parseFloat(values[y]) || 0);
         });
+        console.log('external by year:', external);
 
         // Прочие производственные затраты
         const otherCostItems = {
