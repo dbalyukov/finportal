@@ -363,9 +363,33 @@ router.post('/:projectId/draft', async (req, res) => {
             'quarter': 'quarter'
         };
 
+        // Функция для преобразования даты из DD.MM.YYYY в YYYY-MM-DD
+        const formatDateForDB = (dateStr) => {
+            if (!dateStr) return null;
+            
+            // Если дата уже в формате YYYY-MM-DD
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Если дата в формате DD.MM.YYYY
+            if (dateStr.includes('.')) {
+                const parts = dateStr.split('.');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                }
+            }
+            
+            return null;
+        };
+
         // Insert stages
         for (let i = 0; i < stages.length; i++) {
             const stage = stages[i];
+            const startDate = formatDateForDB(stage.startDate || stage.stage_start_date);
+            const endDate = formatDateForDB(stage.endDate || stage.stage_end_date);
+            const periodType = periodTypeMap[stage.periodType] || 'month';
+            
             await connection.execute(`
                 INSERT INTO project_stages (
                     project_id, stage_number, stage_name, stage_start_date, 
@@ -375,9 +399,9 @@ router.post('/:projectId/draft', async (req, res) => {
                 projectId,
                 i + 1,
                 stage.stage_name || stage.name || `Этап ${i + 1}`,
-                stage.startDate || stage.stage_start_date || null,
-                stage.endDate || stage.stage_end_date || null,
-                periodTypeMap[stage.periodType] || stage.period_type || 'month',
+                startDate,
+                endDate,
+                periodType,
                 stage.periodCount || stage.period_count || 1,
                 stage.plannedRevenue || stage.planned_revenue || 0
             ]);
@@ -411,8 +435,8 @@ router.post('/:projectId/draft', async (req, res) => {
                             cost.cost || cost.cost_value || cost.value || 0,
                             cost.costForClient || cost.cost_value_for_client || cost.value_for_client || 0,
                             cost.periodicity || cost.cost_period || cost.period || 'month',
-                            cost.startDate || cost.cost_date_start || cost.date_start || null,
-                            cost.endDate || cost.cost_date_end || cost.date_end || null,
+                            formatDateForDB(cost.startDate || cost.cost_date_start || cost.date_start),
+                            formatDateForDB(cost.endDate || cost.cost_date_end || cost.date_end),
                             costType,
                             cost.cost_deprecation || cost.deprecation || null,
                             cost.department || cost.cost_departamenet || null,
