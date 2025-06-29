@@ -245,9 +245,12 @@ router.get('/:projectId/full', async (req, res) => {
         const project = projects[0];
         
         // Parse team settings
+        console.log('Raw team data from DB:', project.project_settings_team);
         try {
             project.project_settings_team = JSON.parse(project.project_settings_team || '[]');
+            console.log('Parsed team data:', project.project_settings_team);
         } catch (e) {
+            console.log('Error parsing team data:', e.message);
             project.project_settings_team = [];
         }
         
@@ -315,6 +318,9 @@ router.post('/:projectId/draft', async (req, res) => {
         }
 
         // Update project settings
+        const teamData = JSON.stringify(project_settings?.team || []);
+        console.log('Saving team data:', teamData);
+        
         await connection.execute(`
             UPDATE projects SET 
                 project_name = ?,
@@ -335,7 +341,7 @@ router.post('/:projectId/draft', async (req, res) => {
             project_kam || projects[0].project_kam,
             project_client || projects[0].project_client,
             project_crm_integration_id || projects[0].project_crm_integration_id,
-            JSON.stringify(project_settings?.team || []),
+            teamData,
             project_settings?.contract_type || null,
             project_settings?.profitability || null,
             project_settings?.costs || null,
