@@ -290,6 +290,17 @@ router.post('/:projectId/draft', async (req, res) => {
             project_client
         } = req.body;
 
+        console.log('Received project data:', {
+            projectId,
+            project_settings,
+            stages: stages.length,
+            costs: Object.keys(costs),
+            project_crm_integration_id,
+            project_name,
+            project_kam,
+            project_client
+        });
+
         const connection = await pool.getConnection();
         
         // Check if project exists
@@ -375,11 +386,15 @@ router.post('/:projectId/draft', async (req, res) => {
         // Insert costs
         for (const stageNumber in costs) {
             const stageCosts = costs[stageNumber];
+            console.log(`Processing stage ${stageNumber}:`, stageCosts);
             
             for (const costType of ['external', 'fot', 'internal']) {
                 if (stageCosts[costType] && Array.isArray(stageCosts[costType])) {
+                    console.log(`Processing ${costType} costs for stage ${stageNumber}:`, stageCosts[costType]);
                     for (let i = 0; i < stageCosts[costType].length; i++) {
                         const cost = stageCosts[costType][i];
+                        console.log(`Processing cost ${i + 1}:`, cost);
+                        
                         await connection.execute(`
                             INSERT INTO project_costs (
                                 project_id, stage_number, cost_number, cost_name, 

@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const projectData = {
                     project_settings: {
-                        team: currentProjectData?.team || [],
+                        team: Array.from(document.querySelectorAll('#team-display .team-member-tag')).map(t => t.textContent),
                         contract_type: document.getElementById('project_settings_contract_type')?.value || '',
                         profitability: document.getElementById('project_settings_profitability')?.value || '',
                         costs: document.getElementById('project_settings_costs')?.value || '',
@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Подготавливаем данные для сохранения
                     const projectData = {
                         project_settings: {
-                            team: currentProjectData?.team || [],
+                            team: Array.from(document.querySelectorAll('#team-display .team-member-tag')).map(t => t.textContent),
                             contract_type: document.getElementById('project_settings_contract_type')?.value || '',
                             profitability: document.getElementById('project_settings_profitability')?.value || '',
                             costs: document.getElementById('project_settings_costs')?.value || '',
@@ -1306,16 +1306,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderStageRow(stage = {}, stageId, isReadOnly = false) {
         const stageName = stage.name || stage.stage_name || '';
         
-        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        // Преобразуем даты из различных форматов в YYYY-MM-DD для input type="date"
         const formatDateForInput = (dateStr) => {
             if (!dateStr) return '';
+            
+            // Если дата уже в формате YYYY-MM-DD
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Если дата в формате ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
+            if (dateStr.includes('T')) {
+                return dateStr.split('T')[0];
+            }
+            
+            // Если дата в формате DD.MM.YYYY
             if (dateStr.includes('.')) {
-                // Формат DD.MM.YYYY -> YYYY-MM-DD
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
+            
             return dateStr;
         };
         
@@ -1356,16 +1368,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderExternalCostRow(cost = {}, isReadOnly = false) {
         const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
         
-        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        // Преобразуем даты из различных форматов в YYYY-MM-DD для input type="date"
         const formatDateForInput = (dateStr) => {
             if (!dateStr) return '';
+            
+            // Если дата уже в формате YYYY-MM-DD
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Если дата в формате ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
+            if (dateStr.includes('T')) {
+                return dateStr.split('T')[0];
+            }
+            
+            // Если дата в формате DD.MM.YYYY
             if (dateStr.includes('.')) {
-                // Формат DD.MM.YYYY -> YYYY-MM-DD
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
+            
             return dateStr;
         };
         
@@ -1386,16 +1410,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderFotCostRow(cost = {}, isReadOnly = false) {
         const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
         
-        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        // Преобразуем даты из различных форматов в YYYY-MM-DD для input type="date"
         const formatDateForInput = (dateStr) => {
             if (!dateStr) return '';
+            
+            // Если дата уже в формате YYYY-MM-DD
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Если дата в формате ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
+            if (dateStr.includes('T')) {
+                return dateStr.split('T')[0];
+            }
+            
+            // Если дата в формате DD.MM.YYYY
             if (dateStr.includes('.')) {
-                // Формат DD.MM.YYYY -> YYYY-MM-DD
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
+            
             return dateStr;
         };
         
@@ -1419,16 +1455,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderInternalCostRow(cost = {}, isReadOnly = false) {
         const isOneTime = (cost.periodicity || cost.cost_period || 'Разовое') === 'Разовое';
         
-        // Преобразуем даты из формата DD.MM.YYYY в YYYY-MM-DD для input type="date"
+        // Преобразуем даты из различных форматов в YYYY-MM-DD для input type="date"
         const formatDateForInput = (dateStr) => {
             if (!dateStr) return '';
+            
+            // Если дата уже в формате YYYY-MM-DD
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                return dateStr;
+            }
+            
+            // Если дата в формате ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
+            if (dateStr.includes('T')) {
+                return dateStr.split('T')[0];
+            }
+            
+            // Если дата в формате DD.MM.YYYY
             if (dateStr.includes('.')) {
-                // Формат DD.MM.YYYY -> YYYY-MM-DD
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
+            
             return dateStr;
         };
         
