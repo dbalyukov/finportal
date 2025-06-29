@@ -24,10 +24,50 @@ document.addEventListener('DOMContentLoaded', () => {
             showModal('confirm-nav-modal');
         } else {
             if (app.querySelector('.cost-calculation-page')) {
-                 captureCostData();
+                captureCostData();
             }
-            navigate(page, data);
+            if (page === 'calculation') {
+                guardedNavigateToCalculation(data);
+            } else {
+                navigate(page, data);
+            }
         }
+    }
+
+    async function guardedNavigateToCalculation(project = null) {
+        // project может быть null, если переход с меню
+        let projectId = null;
+        if (project && project.project_id) {
+            projectId = project.project_id;
+        } else if (currentProjectData && currentProjectData.projectId) {
+            projectId = currentProjectData.projectId;
+        }
+        if (projectId) {
+            try {
+                const fullData = await apiClient.getFullProject(projectId);
+                currentProjectData = {
+                    ...currentProjectData,
+                    projectId: projectId,
+                    isCreated: true,
+                    isLoadedFromServer: true,
+                    team: (fullData.project.project_settings_team || []),
+                    stages: fullData.stages || [],
+                    costs: fullData.costs || {},
+                    contract_type: fullData.project.project_settings_contract_type || '',
+                    profitability: fullData.project.project_settings_profitability || '',
+                    costs_val: fullData.project.project_settings_costs || '',
+                    costs_with_nds: fullData.project.project_settings_costs_with_nds || '',
+                    revenue: fullData.project.project_settings_revenue || '',
+                    revenue_with_nds: fullData.project.project_settings_revenue_with_nds || ''
+                };
+            } catch (err) {
+                console.error('Ошибка загрузки данных проекта:', err);
+                currentProjectData = null;
+            }
+        } else {
+            currentProjectData = null;
+        }
+        renderProjectCalculation();
     }
 
     function navigate(page, data = null) {
@@ -56,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderCostCalculation(data);
                 break;
             case 'calculation':
-                renderProjectCalculation();
+                guardedNavigateToCalculation(data);
                 break;
             case 'constants':
                 renderConstants();
@@ -939,90 +979,54 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateSummaryHTML(data, years) {
         const { stages, costs } = data;
 
-        const distributePeriodicValue = (item, valueField) => {
-            const valuesByYear = years.reduce((acc, year) => ({ ...acc, [year]: 0 }), {});
-            if (!item.startDate) return valuesByYear;
-    
-            const startDate = new Date(item.startDate);
-            const endDate = item.endDate && item.endDate >= item.startDate ? new Date(item.endDate) : startDate;
-            const value = item[valueField] || 0;
-            const periodicity = item.periodicity || 'Разовое';
-    
-            if (periodicity === 'Разовое') {
-                const year = startDate.getFullYear();
-                if (valuesByYear[year] !== undefined) valuesByYear[year] += value;
-                return valuesByYear;
-            }
-    
-            let currentDate = new Date(startDate);
-            while (currentDate <= endDate) {
-                const year = currentDate.getFullYear();
-                if (valuesByYear[year] !== undefined) {
-                     if (periodicity === 'Ежегодно') {
-                        valuesByYear[year] += value;
-                    } else if (periodicity === 'Ежемесячно') {
-                        // Distribute monthly value over the year
-                         const startMonth = currentDate.getFullYear() === startDate.getFullYear() ? startDate.getMonth() : 0;
-                         const endMonth = currentDate.getFullYear() === endDate.getFullYear() ? endDate.getMonth() : 11;
-                         const monthsInYear = endMonth - startMonth + 1;
-                         valuesByYear[year] += value * monthsInYear;
-                         // Jump to next year
-                         currentDate.setFullYear(year + 1);
-                         currentDate.setMonth(0);
-                         continue; // skip default increment
-                    }
-                }
-                
-                if (periodicity === 'Ежегодно') {
-                    currentDate.setFullYear(currentDate.getFullYear() + 1);
-                } else { // Fallback for monthly to avoid infinite loops on bad data
-                     currentDate.setFullYear(currentDate.getFullYear() + 1);
-                }
-            }
-            return valuesByYear;
+        // Собираем все затраты в один массив
+        const allCosts = Object.values(costs)
+          .flatMap(stage => [
+            ...(stage.external || []),
+            ...(stage.fot || []),
+            ...(stage.internal || [])
+          ]);
+
+        // Выручка от внутренних продуктов
+        const revenue = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
+        allCosts.filter(c => c.cost_type === 'internal').forEach(cost => {
+            const values = distributePeriodicValue(cost, 'cost_value_for_client');
+            years.forEach(y => revenue[y] += parseFloat(values[y]) || 0);
+        });
+        const revenueItems = { 'Выручка от внутренних продуктов': revenue };
+
+        // Прямые затраты (себестоимость внутренних продуктов)
+        const direct = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
+        allCosts.filter(c => c.cost_type === 'internal').forEach(cost => {
+            const values = distributePeriodicValue(cost, 'cost_value');
+            years.forEach(y => direct[y] += parseFloat(values[y]) || 0);
+        });
+        const directCostItems = { 'Себестоимость внутренних продуктов': direct };
+
+        // ФОТ
+        const fot = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
+        allCosts.filter(c => c.cost_type === 'fot').forEach(cost => {
+            const values = distributePeriodicValue(cost, 'cost_value');
+            years.forEach(y => fot[y] += parseFloat(values[y]) || 0);
+        });
+
+        // Внешние закупки
+        const external = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
+        allCosts.filter(c => c.cost_type === 'external').forEach(cost => {
+            const values = distributePeriodicValue(cost, 'cost_value');
+            years.forEach(y => external[y] += parseFloat(values[y]) || 0);
+        });
+
+        // Прочие производственные затраты
+        const otherCostItems = {
+            'ФОТ': fot,
+            'Внешние закупки': external
         };
 
-        const toRows = (items) => Object.keys(items).map(name => ({ name, values: items[name] }));
-
-        // 1. Revenue from internal services
-        const revenueItems = {};
-        costs.filter(c => c.type === 'internal').forEach(cost => {
-            const key = cost.serviceType;
-            if (!key) return;
-            if (!revenueItems[key]) revenueItems[key] = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-            const revenueValues = distributePeriodicValue(cost, 'costForClient');
-            years.forEach(y => revenueItems[key][y] += revenueValues[y]);
-        });
-
-        // 2. Direct Costs (costs of internal services)
-        const directCostItems = {};
-        costs.filter(c => c.type === 'internal').forEach(cost => {
-            const key = cost.serviceType;
-            if (!key) return;
-            if (!directCostItems[key]) directCostItems[key] = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-            const costValues = distributePeriodicValue(cost, 'cost');
-            years.forEach(y => directCostItems[key][y] += costValues[y]);
-        });
-
-        // 3. Other Production Costs
-        const otherCostItems = {};
-        const fotTotalByYear = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-        costs.filter(c => c.type === 'ФОТ').forEach(cost => {
-            const fotValues = distributePeriodicValue(cost, 'cost');
-            years.forEach(y => fotTotalByYear[y] += fotValues[y]);
-        });
-        otherCostItems['Прямой ФОТ'] = fotTotalByYear;
-        otherCostItems['Затраты на персонал'] = fotTotalByYear; // Per requirement
-        otherCostItems['Налог'] = years.reduce((acc, y) => ({ ...acc, [y]: fotTotalByYear[y] * 0.13 }), {});
-        const otherCostCategories = ['Материалы', 'Услуги сторонних организаций', 'Накладные расходы'];
-        costs.filter(c => otherCostCategories.includes(c.name)).forEach(cost => {
-            if (!otherCostItems[cost.name]) otherCostItems[cost.name] = years.reduce((acc, y) => ({ ...acc, [y]: 0 }), {});
-            const costValues = distributePeriodicValue(cost, 'cost');
-            years.forEach(y => otherCostItems[cost.name][y] += costValues[y]);
-        });
-
-        // 4. Final Totals - made same as "Прочие производственные затраты" per image
+        // Финансовые показатели (пример: просто копируем прочие производственные затраты)
         const finalTotals = otherCostItems;
+
+        const toRows = (items) => Object.keys(items).map(name => ({ name, values: items[name] }));
 
         const revenueTable = generateSummaryTable('Выручка', toRows(revenueItems), years, 'card-green');
         const directCostsTable = generateSummaryTable('Прямые затраты', toRows(directCostItems), years, 'card-pink');
@@ -1309,32 +1313,19 @@ document.addEventListener('DOMContentLoaded', () => {
         // Преобразуем даты из различных форматов в YYYY-MM-DD для input type="date"
         const formatDateForInput = (dateStr) => {
             if (!dateStr) return '';
-            
-            // Если дата уже в формате YYYY-MM-DD
-            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                return dateStr;
-            }
-            
-            // Если дата в формате ISO (YYYY-MM-DDTHH:mm:ss.sssZ)
-            if (dateStr.includes('T')) {
-                return dateStr.split('T')[0];
-            }
-            
-            // Если дата в формате DD.MM.YYYY
             if (dateStr.includes('.')) {
+                // Формат DD.MM.YYYY -> YYYY-MM-DD
                 const parts = dateStr.split('.');
                 if (parts.length === 3) {
                     return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
             }
-            
             return dateStr;
         };
         
         const startDate = formatDateForInput(stage.startDate || stage.stage_start_date || '');
         const endDate = formatDateForInput(stage.endDate || stage.stage_end_date || '');
         const periodType = stage.periodType || stage.stage_period_type || 'Месяц';
-        const plannedRevenue = stage.plannedRevenue || stage.stage_planned_revenue || 0;
         const disabled = isReadOnly ? 'disabled' : '';
         const periodTypes = ['Месяц', 'Квартал'];
 
@@ -1350,6 +1341,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const divisor = periodType === 'Квартал' ? 3 : 1;
                 periodCount = Math.ceil(months / divisor);
             }
+        }
+
+        // Новый расчет плановой выручки для этапа
+        let plannedRevenue = 0;
+        if (window.currentProjectData && window.currentProjectData.costs) {
+            const allCosts = Object.values(window.currentProjectData.costs)
+                .flatMap(stageCosts => [
+                    ...(stageCosts.external || []),
+                    ...(stageCosts.fot || []),
+                    ...(stageCosts.internal || [])
+                ]);
+            plannedRevenue = allCosts
+                .filter(cost =>
+                    String(cost.stage_number) === String(stage.stage_number) ||
+                    String(cost.stage_number) === String(stage.id) ||
+                    String(cost.stage_number) === String(stage.number)
+                )
+                .reduce((sum, cost) => sum + parseFloat(cost.cost_value_for_client || 0), 0);
+        } else {
+            plannedRevenue = stage.plannedRevenue || stage.stage_planned_revenue || 0;
         }
     
         return `
